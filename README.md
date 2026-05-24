@@ -1,10 +1,10 @@
-# 🚀 EmpleoAutopilot — Automatización Inteligente de Búsqueda de Empleo con IA
+EmpleoAutopilot — Automatización Inteligente de Búsqueda de Empleo con IA
 
-**EmpleoAutopilot** es un ecosistema de automatización diseñado para revolucionar la forma en que los desarrolladores y profesionales de TI se postulan a ofertas de trabajo. En lugar de enviar CVs genéricos de forma masiva, la plataforma rastrea ofertas en **8 portales de empleo de España y globales**, compara los requisitos con tu perfil profesional y utiliza una **arquitectura de Inteligencia Artificial en cascada** para redactar un currículum y una carta de presentación adaptados al 100% para cada oferta, postulándote automáticamente vía correo electrónico.
+EmpleoAutopilot** es un ecosistema de automatización diseñado para revolucionar la forma en que los desarrolladores y profesionales de TI se postulan a ofertas de trabajo. En lugar de enviar CVs genéricos de forma masiva, la plataforma rastrea ofertas en **8 portales de empleo de España y globales**, compara los requisitos con tu perfil profesional y utiliza una **arquitectura de Inteligencia Artificial en cascada** para redactar un currículum y una carta de presentación adaptados al 100% para cada oferta, postulándote automáticamente vía correo electrónico.
 
 ---
 
-## 📊 Arquitectura del Sistema
+Arquitectura del Sistema
 
 La arquitectura de EmpleoAutopilot está diseñada con una filosofía robusta de desacoplamiento, tolerancia a fallos y optimización de costes.
 
@@ -32,7 +32,7 @@ La arquitectura de EmpleoAutopilot está diseñada con una filosofía robusta de
              (jobs_db.json / Kanban)            (Envío a Reclutador)
 ```
 
-### (*) Algoritmo de Resiliencia en Cascada de IA (Tolerancia a Fallos)
+ Algoritmo de Resiliencia en Cascada de IA (Tolerancia a Fallos)
 Para garantizar un funcionamiento ininterrumpido sin bloqueos por límites de cuota (Rate Limits / Error 429) o caídas de servidor (Error 503), el backend implementa una **cascada jerárquica multimodelo**:
 
 1. **`gemini-2.5-flash` (Primario):** Intenta el análisis premium y la reescritura extendida.
@@ -40,9 +40,9 @@ Para garantizar un funcionamiento ininterrumpido sin bloqueos por límites de cu
 3. **`gemini-2.0-flash-lite` (Tercer nivel):** Tercer fallback de alta velocidad y bajo consumo.
 4. **`Offline NLP Engine` (Último recurso):** Si toda la red o las APIs fallan, un motor local compila un CV estructurado y adaptado usando técnicas locales de procesamiento para asegurar que nunca pierdas una oportunidad.
 
----
 
-## ✨ Características Principales
+
+ Características Principales
 
 *   **Scraper Inteligente Multicanal:** Rastreo concurrente en tiempo real de 8 portales líderes:
     1.  *Remotive* (Global, remoto)
@@ -59,7 +59,7 @@ Para garantizar un funcionamiento ininterrumpido sin bloqueos por límites de cu
 
 ---
 
-## 🛠️ Stack Tecnológico
+ Stack Tecnológico
 
 *   **Frontend:** React (Vite), Lucide Icons, CSS Glassmorphism nativo, animaciones dinámicas SVG.
 *   **Backend:** Node.js, Express, Cheerio (scraping semántico de texto), Nodemailer (envío de correos por SMTP con adjuntos).
@@ -68,28 +68,28 @@ Para garantizar un funcionamiento ininterrumpido sin bloqueos por límites de cu
 
 ---
 
-## 🚀 Instalación y Uso
+ Instalación y Uso
 
-### 1. Clonar el repositorio
+ 1. Clonar el repositorio
 ```bash
 git clone https://github.com/tu-usuario/empleo-autopilot.git
 cd empleo-autopilot
 ```
 
-### 2. Instalar dependencias
+2. Instalar dependencias
 Instala los paquetes tanto para el frontend como para el servidor de desarrollo:
 ```bash
 npm install
 ```
 
-### 3. Configurar variables de entorno
+3. Configurar variables de entorno
 Copia el archivo `.env.example` y renómbralo a `.env`:
 ```bash
 cp .env.example .env
 ```
 Abre el archivo `.env` y rellena tus datos correspondientes (como tu clave API de Gemini y tus credenciales SMTP).
 
-### 4. Ejecutar en modo desarrollo
+4. Ejecutar en modo desarrollo
 Inicia el backend en el puerto `3001` y el frontend en el puerto `5173` de forma simultánea con un solo comando:
 ```bash
 npm run dev
@@ -99,7 +99,7 @@ Navega a [http://localhost:5173](http://localhost:5173) en tu navegador para ver
 
 ---
 
-## 📂 Estructura del Proyecto
+ 📂 Estructura del Proyecto
 
 ```text
 ├── public/                # Recursos estáticos públicos
@@ -121,10 +121,10 @@ Navega a [http://localhost:5173](http://localhost:5173) en tu navegador para ver
 
 ---
 
-## 🛡️ Licencia
+Licencia
 
 Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
 
 ---
 
-*Desarrollado con ❤️ para empoderar a los ingenieros de software a encontrar su próximo gran desafío técnico de forma inteligente y optimizada.*
+Desarrollado con ❤️ para empoderar a los ingenieros de software a encontrar su próximo gran desafío técnico de forma inteligente y optimizada.
