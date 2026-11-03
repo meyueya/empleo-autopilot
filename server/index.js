@@ -1,4 +1,5 @@
 import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -19,8 +20,48 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+const HOST = '127.0.0.1';
+const API_TOKEN = process.env.AUTOPILOT_API_TOKEN;
+if (!API_TOKEN || Buffer.byteLength(API_TOKEN) < 32) {
+  throw new Error('Set AUTOPILOT_API_TOKEN to a random secret of at least 32 bytes.');
+}
+const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173').split(',').map(s => s.trim()));
+app.use(cors({
+  origin(origin, callback) { callback(null, !origin || allowedOrigins.has(origin)); },
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
+app.use(express.json({ limit: '256kb' }));
+app.use('/api', (req, res, next) => {
+  const origin = req.get('origin');
+  if (origin && !allowedOrigins.has(origin)) return res.status(403).json({ error: 'Origin not allowed.' });
+  const supplied = req.get('authorization') || '';
+  const expected = Buffer.from('Bearer ' + API_TOKEN);
+  const actual = Buffer.from(supplied);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
+const SECRET_FIELDS = ['geminiApiKey', 'pushoverUserKey', 'pushoverToken', 'smtpPass', 'joobleApiKey', 'adzunaAppKey'];
+function publicSettings(settings) {
+  const safe = { ...settings };
+  for (const key of SECRET_FIELDS) safe[key] = '';
+  return safe;
+}
+const requests = new Map();
+const rateTimer = setInterval(() => requests.clear(), 60000);
+rateTimer.unref();
+app.use('/api', (req, res, next) => {
+  const key = req.socket.remoteAddress || 'local';
+  const count = (requests.get(key) || 0) + 1;
+  requests.set(key, count);
+  if (count > 120) return res.status(429).json({ error: 'Too many requests.' });
+  next();
+});
 
 // API: Get all jobs
 app.get('/api/jobs', (req, res) => {
@@ -89,7 +130,7 @@ app.post('/api/jobs', async (req, res) => {
     res.status(201).json(enrichedJob);
   } catch (error) {
     console.error("Error creating job:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Request failed; see protected server logs.' });
   }
 });
 
@@ -134,7 +175,7 @@ app.post('/api/jobs/:id/reanalyze', async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('[Reanalyze] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Request failed; see protected server logs.' });
   }
 });
 
@@ -169,13 +210,28 @@ app.post('/api/profile', (req, res) => {
 // API: Get settings
 app.get('/api/settings', (req, res) => {
   const db = readDb();
-  res.json(db.settings);
+  res.json(publicSettings(db.settings));
 });
 
 // API: Update settings
 app.post('/api/settings', (req, res) => {
   const db = readDb();
-  db.settings = { ...db.settings, ...req.body };
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ error: 'Settings must be an object.' });
+  }
+  const clean = Object.fromEntries(Object.entries(req.body).filter(([key]) =>
+    Object.hasOwn(db.settings, key) && !['__proto__', 'prototype', 'constructor'].includes(key)
+  ));
+  for (const key of SECRET_FIELDS) {
+    if (clean[key] === '' || clean[key] == null) delete clean[key];
+  }
+  for (const value of Object.values(clean)) {
+    if (typeof value === 'string' && /[\r\n\0]/.test(value)) {
+      return res.status(400).json({ error: 'Multiline settings are not allowed.' });
+    }
+  }
+  req.body = clean;
+  db.settings = { ...db.settings, ...clean };
   writeDb(db);
 
   // Sync credentials and settings to .env file and process.env dynamically
@@ -207,21 +263,22 @@ app.post('/api/settings', (req, res) => {
 
           const regex = new RegExp(`^${envKey}=.*`, 'm');
           if (envContent.match(regex)) {
-            envContent = envContent.replace(regex, `${envKey}=${val}`);
+            envContent = envContent.replace(regex, () => `${envKey}=${JSON.stringify(String(val))}`);
           } else {
-            envContent += `\n${envKey}=${val}`;
+            envContent += `\n${envKey}=${JSON.stringify(String(val))}`;
           }
         }
       }
       
-      fs.writeFileSync(envPath, envContent, 'utf8');
+      fs.writeFileSync(envPath, envContent, { encoding: 'utf8', mode: 0o600 });
+      fs.chmodSync(envPath, 0o600);
       console.log("💾 Credentials and settings successfully written to .env file and process.env.");
     } catch (err) {
       console.error("Error writing settings to .env file:", err);
     }
   }
 
-  res.json(db.settings);
+  res.json(publicSettings(db.settings));
 });
 
 // API: Test Pushover Push Notification
@@ -250,7 +307,7 @@ app.post('/api/test-push', async (req, res) => {
     }
   } catch (error) {
     console.error("Error in test-push endpoint:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: 'Request failed; see protected server logs.' });
   }
 });
 
@@ -325,7 +382,7 @@ app.post('/api/jobs/:id/send', async (req, res) => {
     });
   } catch (error) {
     console.error("Error sending application email:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Request failed; see protected server logs.' });
   }
 });
 
@@ -343,6 +400,6 @@ app.get('/api/csv/download', (req, res) => {
 });
 
 // Start Express Server
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log(`🚀 EmpleoAutopilot Server running on http://localhost:${PORT}`);
 });
