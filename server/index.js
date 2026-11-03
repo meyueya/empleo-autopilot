@@ -46,6 +46,23 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+const SECRET_FIELDS = ['geminiApiKey', 'pushoverUserKey', 'pushoverToken', 'smtpPass', 'joobleApiKey', 'adzunaAppKey'];
+function publicSettings(settings) {
+  const safe = { ...settings };
+  for (const key of SECRET_FIELDS) safe[key] = '';
+  return safe;
+}
+const requests = new Map();
+const rateTimer = setInterval(() => requests.clear(), 60000);
+rateTimer.unref();
+app.use('/api', (req, res, next) => {
+  const key = req.socket.remoteAddress || 'local';
+  const count = (requests.get(key) || 0) + 1;
+  requests.set(key, count);
+  if (count > 120) return res.status(429).json({ error: 'Too many requests.' });
+  next();
+});
+
 // API: Get all jobs
 app.get('/api/jobs', (req, res) => {
   const db = readDb();
@@ -193,13 +210,28 @@ app.post('/api/profile', (req, res) => {
 // API: Get settings
 app.get('/api/settings', (req, res) => {
   const db = readDb();
-  res.json(db.settings);
+  res.json(publicSettings(db.settings));
 });
 
 // API: Update settings
 app.post('/api/settings', (req, res) => {
   const db = readDb();
-  db.settings = { ...db.settings, ...req.body };
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ error: 'Settings must be an object.' });
+  }
+  const clean = Object.fromEntries(Object.entries(req.body).filter(([key]) =>
+    Object.hasOwn(db.settings, key) && !['__proto__', 'prototype', 'constructor'].includes(key)
+  ));
+  for (const key of SECRET_FIELDS) {
+    if (clean[key] === '' || clean[key] == null) delete clean[key];
+  }
+  for (const value of Object.values(clean)) {
+    if (typeof value === 'string' && /[\r\n\0]/.test(value)) {
+      return res.status(400).json({ error: 'Multiline settings are not allowed.' });
+    }
+  }
+  req.body = clean;
+  db.settings = { ...db.settings, ...clean };
   writeDb(db);
 
   // Sync credentials and settings to .env file and process.env dynamically
@@ -231,21 +263,22 @@ app.post('/api/settings', (req, res) => {
 
           const regex = new RegExp(`^${envKey}=.*`, 'm');
           if (envContent.match(regex)) {
-            envContent = envContent.replace(regex, `${envKey}=${val}`);
+            envContent = envContent.replace(regex, () => `${envKey}=${JSON.stringify(String(val))}`);
           } else {
-            envContent += `\n${envKey}=${val}`;
+            envContent += `\n${envKey}=${JSON.stringify(String(val))}`;
           }
         }
       }
       
-      fs.writeFileSync(envPath, envContent, 'utf8');
+      fs.writeFileSync(envPath, envContent, { encoding: 'utf8', mode: 0o600 });
+      fs.chmodSync(envPath, 0o600);
       console.log("💾 Credentials and settings successfully written to .env file and process.env.");
     } catch (err) {
       console.error("Error writing settings to .env file:", err);
     }
   }
 
-  res.json(db.settings);
+  res.json(publicSettings(db.settings));
 });
 
 // API: Test Pushover Push Notification
