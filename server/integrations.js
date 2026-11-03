@@ -77,7 +77,9 @@ export async function logToSpreadsheet(job, profile, settings) {
   // CSV values escaping helper
   const escapeCsv = (str) => {
     if (!str) return '';
-    const clean = str.replace(/"/g, '""').replace(/\n/g, ' ');
+    const text = String(str).replace(/[\r\n]/g, ' ');
+    const safe = /^[\s]*[=+@\-\t]/.test(text) ? "'" + text : text;
+    const clean = safe.replace(/"/g, '""');
     return `"${clean}"`;
   };
 
