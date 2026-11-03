@@ -29,7 +29,7 @@ export default function FlowSimulator() {
   ];
 
   const cvLines = [
-    "PEDRO CASTILLO CARRILLO - RESUMEN EJECUTIVO ADAPTADO",
+    "CANDIDATO DE DEMOSTRACIÓN - RESUMEN EJECUTIVO ADAPTADO",
     "---------------------------------------------------",
     "Puesto: Senior Full Stack Developer & Project Leader",
     "Coincidencia con la oferta: 94.7% (Match de Alta Prioridad)",
@@ -127,7 +127,7 @@ export default function FlowSimulator() {
     switch (step) {
       case 1: // Scraping Portals
         addLog("Iniciando Simulación de Arquitectura EmpleoAutopilot...", "info");
-        addLog("Cargando perfil local de Pedro Castillo Carrillo (Senior Full Stack)...", "info");
+        addLog("Cargando perfil local de el candidato de demostración (Senior Full Stack)...", "info");
         addLog("Activando Smart Scraper en Node.js...", "scrape");
         addLog("Escaneando 8 fuentes de empleo en paralelo (Globales y de España)...", "scrape");
         
