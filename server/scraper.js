@@ -1,10 +1,46 @@
 import axios from 'axios';
+import { lookup } from 'node:dns/promises';
+import https from 'node:https';
+
 import * as cheerio from 'cheerio';
 
 // ─── Real URL scraper for manual job insertion ─────────────────────────────
 export async function scrapeJobUrl(url) {
   try {
-    const response = await axios.get(url, {
+    const target = new URL(url);
+    if (target.protocol !== 'https:' || target.username || target.password || (target.port && target.port !== '443')) {
+      throw new Error('Only HTTPS job URLs without credentials on port 443 are allowed.');
+    }
+    // Resolve once, reject non-public IPv4 ranges, and pin the connection to
+    // that address to prevent DNS rebinding. Redirects and proxies are disabled.
+    const addresses = await lookup(target.hostname, { family: 4, all: true });
+    const isPublic = address => {
+      const octets = address.split('.').map(Number);
+      if (octets.length !== 4 || octets.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+      const [a, b, third] = octets;
+      return !(a === 0 || a === 10 || a === 127 || a >= 224 ||
+        (a === 100 && b >= 64 && b <= 127) ||
+        (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && (b === 168 || b === 0 || b === 2)) ||
+        (a === 198 && (b === 18 || b === 19 || (b === 51 && third === 100))) ||
+        (a === 203 && b === 0 && third === 113));
+    };
+    if (!addresses.length || addresses.some(entry => !isPublic(entry.address))) {
+      throw new Error('Job URL must resolve exclusively to public IPv4 addresses.');
+    }
+    const pinned = addresses[0].address;
+    const agent = new https.Agent({
+      lookup(hostname, options, callback) {
+        if (options?.all) callback(null, [{ address: pinned, family: 4 }]);
+        else callback(null, pinned, 4);
+      }
+    });
+    const response = await axios.get(target.href, {
+      httpsAgent: agent,
+      proxy: false,
+      maxRedirects: 0,
+      maxContentLength: 2 * 1024 * 1024,
+      maxBodyLength: 2 * 1024 * 1024,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
