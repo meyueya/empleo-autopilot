@@ -1,4 +1,5 @@
 import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -19,8 +20,31 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+const HOST = '127.0.0.1';
+const API_TOKEN = process.env.AUTOPILOT_API_TOKEN;
+if (!API_TOKEN || Buffer.byteLength(API_TOKEN) < 32) {
+  throw new Error('Set AUTOPILOT_API_TOKEN to a random secret of at least 32 bytes.');
+}
+const allowedOrigins = new Set((process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173').split(',').map(s => s.trim()));
+app.use(cors({
+  origin(origin, callback) { callback(null, !origin || allowedOrigins.has(origin)); },
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
+app.use(express.json({ limit: '256kb' }));
+app.use('/api', (req, res, next) => {
+  const origin = req.get('origin');
+  if (origin && !allowedOrigins.has(origin)) return res.status(403).json({ error: 'Origin not allowed.' });
+  const supplied = req.get('authorization') || '';
+  const expected = Buffer.from('Bearer ' + API_TOKEN);
+  const actual = Buffer.from(supplied);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 
 // API: Get all jobs
 app.get('/api/jobs', (req, res) => {
@@ -89,7 +113,7 @@ app.post('/api/jobs', async (req, res) => {
     res.status(201).json(enrichedJob);
   } catch (error) {
     console.error("Error creating job:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Request failed; see protected server logs.' });
   }
 });
 
@@ -134,7 +158,7 @@ app.post('/api/jobs/:id/reanalyze', async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('[Reanalyze] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Request failed; see protected server logs.' });
   }
 });
 
@@ -250,7 +274,7 @@ app.post('/api/test-push', async (req, res) => {
     }
   } catch (error) {
     console.error("Error in test-push endpoint:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: 'Request failed; see protected server logs.' });
   }
 });
 
@@ -325,7 +349,7 @@ app.post('/api/jobs/:id/send', async (req, res) => {
     });
   } catch (error) {
     console.error("Error sending application email:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Request failed; see protected server logs.' });
   }
 });
 
@@ -343,6 +367,6 @@ app.get('/api/csv/download', (req, res) => {
 });
 
 // Start Express Server
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log(`🚀 EmpleoAutopilot Server running on http://localhost:${PORT}`);
 });
